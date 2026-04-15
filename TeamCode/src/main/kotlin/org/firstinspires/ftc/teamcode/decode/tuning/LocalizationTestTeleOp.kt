@@ -1,9 +1,14 @@
-package org.firstinspires.ftc.teamcode.decodetests
+package org.firstinspires.ftc.teamcode.decode.tuning
 
 import com.bylazar.configurables.annotations.Configurable
 import com.pedropathing.geometry.Pose
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp
 import kotlin.math.abs
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit
+import org.firstinspires.ftc.robotcore.external.navigation.Position
+import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles
+import org.firstinspires.ftc.teamcode.decode.DecodeField
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants
 import org.firstinspires.ftc.teamcode.starter.config.RobotConfig
 import org.firstinspires.ftc.teamcode.starter.core.OpModeBase
@@ -16,48 +21,57 @@ import org.firstinspires.ftc.teamcode.starter.vision.AprilTagPipeline
 import org.firstinspires.ftc.teamcode.starter.vision.VisionSubsystem
 
 /**
- * INTO THE DEEP (2024-2025) localization consistency test.
+ * FTC DECODE (2025-2026) localization consistency test.
  *
- * Combines normal mecanum teleop with two one-touch path commands and live
- * AprilTag pose correction so you can measure how well the odometry holds up
- * over extended drives:
+ * Normal mecanum teleop plus two one-touch path commands and live AprilTag pose
+ * correction so you can measure how well odometry holds up over extended drives:
  *
- *  - **Triangle (Y)** — Pedro-follows to [IntoTheDeepField.BLUE_OBSERVATION_TIP].
- *    Move any stick or press either button to interrupt.
- *  - **Cross (A)** — Pedro-follows to [IntoTheDeepField.SUBMERSIBLE_CENTER].
- *    Same interrupt rules.
+ *  - **Triangle (Y)** — Pedro-follows to a configurable waypoint (defaults to
+ *    field centre). Move any stick or press either button to interrupt.
+ *  - **Cross (A)** — Pedro-follows to [DecodeField.FIELD_CENTER]. Same interrupt
+ *    rules.
  *
  * AprilTag detections are fed into [AprilTagCorrector] every tick. When two
- * stable observations of the same tag agree, the corrector hard-snaps
- * Pedro's pose to the vision-derived value. You can toggle this with
- * [visionCorrectionEnabled] in the Panels config tab.
+ * stable observations of the same tag agree, the corrector hard-snaps Pedro's
+ * pose to the vision-derived value. Toggle via [visionCorrectionEnabled] in
+ * the Panels config tab.
+ *
+ * ## Tag library
+ * The pipeline loads the FTC SDK's official DECODE library directly. Obelisk
+ * motif tags (21-23) sit on a movable structure and are filtered out by the
+ * pipeline's ignore list.
  *
  * ## Coordinate system
- * See [IntoTheDeepField] — origin at red alliance / audience wall corner.
- * Tag headings and triangle tip coordinates come from the SDK's built-in
- * INTO THE DEEP library (cross-checked against the bytecode of
- * [org.firstinspires.ftc.vision.apriltag.AprilTagGameDatabase]).
- *
- * ## Season-specific
- * This entire [decodetests] package is INTO THE DEEP-specific.
- * Delete it at the start of the next season.
+ * Pedro 2.1.1 InvertedFTCCoordinates (origin at field centre = (72, 72) in
+ * Pedro), 144" field. The FTC SDK does the camera-offset + tag-pose math
+ * internally; we just translate frames.
  */
-@TeleOp(name = "ITD: Localization Test", group = "Decode Tests")
+@TeleOp(name = "DECODE: Localization Test", group = "Decode Tests")
 @Configurable
 class LocalizationTestTeleOp : OpModeBase() {
 
     companion object {
-        /**
-         * Camera position relative to robot centre (inches).
-         * x = forward offset, y = left offset, heading = yaw rotation (radians).
-         * Set to match your robot's physical camera mount.
-         */
-        @JvmField var cameraOffsetX: Double = 7.09   // 18 cm forward of robot centre
-        @JvmField var cameraOffsetY: Double = 0.0
-        @JvmField var cameraOffsetHeadingDeg: Double = 0.0
+        // Camera position in the FTC robot frame: +x = right, +y = forward, +z = up. Inches.
+        // These get handed to AprilTagProcessor.setCameraPose() which then computes
+        // detection.robotPose for us — so the math has to match the SDK's convention,
+        // not Pedro's. Defaults below are 18 cm forward of robot centre, on centreline.
+        @JvmField var cameraOffsetRightIn: Double = 0.0
+        @JvmField var cameraOffsetForwardIn: Double = 7.09
+        @JvmField var cameraOffsetUpIn: Double = 0.0
+
+        // Camera orientation in the FTC robot frame, degrees. Yaw = rotation about +z
+        // (CCW positive) — 0 = camera pointing forward.
+        @JvmField var cameraYawDeg: Double = 0.0
+        @JvmField var cameraPitchDeg: Double = 0.0
+        @JvmField var cameraRollDeg: Double = 0.0
 
         /** Set false to disable AprilTag pose corrections (odometry-only mode). */
         @JvmField var visionCorrectionEnabled: Boolean = true
+
+        /** X coordinate of the Y-button waypoint (inches, Pedro frame). */
+        @JvmField var waypointAX: Double = 72.0
+        /** Y coordinate of the Y-button waypoint (inches, Pedro frame). */
+        @JvmField var waypointAY: Double = 72.0
 
         /** Stick axis magnitude above which a path is considered interrupted by the driver. */
         @JvmField var stickInterruptThreshold: Double = 0.1
@@ -68,7 +82,7 @@ class LocalizationTestTeleOp : OpModeBase() {
     private lateinit var corrector: AprilTagCorrector
     private lateinit var vision: VisionSubsystem
 
-    private enum class State { TELEOP, PATH_TO_TRIANGLE, PATH_TO_CENTER }
+    private enum class State { TELEOP, PATH_TO_WAYPOINT_A, PATH_TO_CENTER }
     private var state = State.TELEOP
 
     override fun configure() {
@@ -80,9 +94,16 @@ class LocalizationTestTeleOp : OpModeBase() {
             VisionSubsystem(
                 cameraName = RobotConfig.Vision.WEBCAM,
                 pipeline   = AprilTagPipeline(
-                    cameraOffset = Pose(cameraOffsetX, cameraOffsetY,
-                                        Math.toRadians(cameraOffsetHeadingDeg)),
-                    tagLibrary   = IntoTheDeepField.tagLibrary,
+                    cameraPosition = Position(
+                        DistanceUnit.INCH,
+                        cameraOffsetRightIn, cameraOffsetForwardIn, cameraOffsetUpIn,
+                        0,
+                    ),
+                    cameraOrientation = YawPitchRollAngles(
+                        AngleUnit.DEGREES,
+                        cameraYawDeg, cameraPitchDeg, cameraRollDeg,
+                        0,
+                    ),
                 ),
                 corrector = corrector,
             )
@@ -94,7 +115,6 @@ class LocalizationTestTeleOp : OpModeBase() {
     }
 
     override fun onLoop() {
-        // Toggle vision correction live.
         corrector.enabled = visionCorrectionEnabled
 
         when (state) {
@@ -114,11 +134,11 @@ class LocalizationTestTeleOp : OpModeBase() {
                     precision = precision,
                 )
 
-                if (driver.yPressed) goTo(IntoTheDeepField.BLUE_OBSERVATION_TIP, State.PATH_TO_TRIANGLE)
-                if (driver.aPressed) goTo(IntoTheDeepField.SUBMERSIBLE_CENTER,    State.PATH_TO_CENTER)
+                if (driver.yPressed) goTo(Pose(waypointAX, waypointAY, 0.0), State.PATH_TO_WAYPOINT_A)
+                if (driver.aPressed) goTo(DecodeField.FIELD_CENTER,          State.PATH_TO_CENTER)
             }
 
-            State.PATH_TO_TRIANGLE, State.PATH_TO_CENTER -> {
+            State.PATH_TO_WAYPOINT_A, State.PATH_TO_CENTER -> {
                 if (shouldInterrupt()) {
                     cancelPath()
                 } else if (!drive.isFollowing) {
@@ -159,15 +179,24 @@ class LocalizationTestTeleOp : OpModeBase() {
 
     private fun emitTelemetry() {
         val targetLabel = when (state) {
-            State.PATH_TO_TRIANGLE -> "obs. zone tip ${fmt(IntoTheDeepField.BLUE_OBSERVATION_TIP)}"
-            State.PATH_TO_CENTER   -> "submersible ${fmt(IntoTheDeepField.SUBMERSIBLE_CENTER)}"
-            State.TELEOP           -> "—"
+            State.PATH_TO_WAYPOINT_A -> "waypoint A (%.1f, %.1f)".format(waypointAX, waypointAY)
+            State.PATH_TO_CENTER     -> "field centre ${fmt(DecodeField.FIELD_CENTER)}"
+            State.TELEOP             -> "—"
+        }
+        telemetryBag.section("Vision") {
+            put("tags seen (raw)", vision.lastDetections.size)
+            put("poses computed", vision.lastFieldPoses.size)
+            for (fp in vision.lastFieldPoses) {
+                put("tag ${fp.tagId}",
+                    "(%.1f, %.1f) h=%.1f° range=%.0f\"".format(
+                        fp.fieldPose.x, fp.fieldPose.y,
+                        Math.toDegrees(fp.fieldPose.heading), fp.rangeInches))
+            }
         }
         telemetryBag.section("Localization Test") {
             put("state", state.name)
             put("target", targetLabel)
             put("vision correction", if (visionCorrectionEnabled) "ON" else "OFF")
-            put("tags this frame", vision.lastDetections.size)
             put("corrections applied", corrector.appliedCount)
             put("corrections rejected", corrector.rejectedCount)
         }
