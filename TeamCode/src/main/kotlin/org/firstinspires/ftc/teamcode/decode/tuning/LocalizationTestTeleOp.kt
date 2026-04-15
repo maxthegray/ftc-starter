@@ -10,15 +10,15 @@ import org.firstinspires.ftc.robotcore.external.navigation.Position
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles
 import org.firstinspires.ftc.teamcode.decode.DecodeField
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants
-import org.firstinspires.ftc.teamcode.starter.config.RobotConfig
-import org.firstinspires.ftc.teamcode.starter.core.OpModeBase
-import org.firstinspires.ftc.teamcode.starter.drive.DriveConfig
-import org.firstinspires.ftc.teamcode.starter.drive.MecanumDriveSubsystem
-import org.firstinspires.ftc.teamcode.starter.localization.AprilTagCorrector
-import org.firstinspires.ftc.teamcode.starter.localization.Localizer
-import org.firstinspires.ftc.teamcode.starter.pathing.path
-import org.firstinspires.ftc.teamcode.starter.vision.AprilTagPipeline
-import org.firstinspires.ftc.teamcode.starter.vision.VisionSubsystem
+import org.firstinspires.ftc.teamcode.general.config.RobotConfig
+import org.firstinspires.ftc.teamcode.general.core.OpModeBase
+import org.firstinspires.ftc.teamcode.general.drive.DriveConfig
+import org.firstinspires.ftc.teamcode.general.drive.MecanumDriveSubsystem
+import org.firstinspires.ftc.teamcode.general.localization.AprilTagCorrector
+import org.firstinspires.ftc.teamcode.general.localization.Localizer
+import org.firstinspires.ftc.teamcode.general.pathing.path
+import org.firstinspires.ftc.teamcode.general.vision.AprilTagPipeline
+import org.firstinspires.ftc.teamcode.general.vision.VisionSubsystem
 
 /**
  * FTC DECODE (2025-2026) localization consistency test.

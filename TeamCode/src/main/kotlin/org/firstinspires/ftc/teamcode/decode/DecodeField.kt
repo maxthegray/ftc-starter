@@ -12,7 +12,7 @@ import com.pedropathing.geometry.Pose
  * the converter math stays clean.)
  *
  * Tag positions are NOT defined here — [org.firstinspires.ftc.vision.apriltag.AprilTagGameDatabase.getDecodeTagLibrary]
- * is the source of truth, and [org.firstinspires.ftc.teamcode.starter.vision.AprilTagPipeline]
+ * is the source of truth, and [org.firstinspires.ftc.teamcode.general.vision.AprilTagPipeline]
  * loads it directly. Obelisk motif tags (21/22/23) have no fixed field
  * position and are filtered out by the pipeline's ignore list.
  */

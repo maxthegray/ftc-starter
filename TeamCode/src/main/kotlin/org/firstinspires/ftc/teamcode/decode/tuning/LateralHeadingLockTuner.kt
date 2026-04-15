@@ -7,10 +7,10 @@ import kotlin.math.abs
 import org.firstinspires.ftc.teamcode.decode.control.HeadingLockConfig
 import org.firstinspires.ftc.teamcode.decode.control.LateralHeadingLock
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants
-import org.firstinspires.ftc.teamcode.starter.core.OpModeBase
-import org.firstinspires.ftc.teamcode.starter.drive.DriveConfig
-import org.firstinspires.ftc.teamcode.starter.drive.MecanumDriveSubsystem
-import org.firstinspires.ftc.teamcode.starter.localization.Localizer
+import org.firstinspires.ftc.teamcode.general.core.OpModeBase
+import org.firstinspires.ftc.teamcode.general.drive.DriveConfig
+import org.firstinspires.ftc.teamcode.general.drive.MecanumDriveSubsystem
+import org.firstinspires.ftc.teamcode.general.localization.Localizer
 
 /**
  * Lateral heading-lock PIDF tuner.
@@ -29,7 +29,7 @@ import org.firstinspires.ftc.teamcode.starter.localization.Localizer
  *
  * AprilTag pose snaps are absorbed inside [LateralHeadingLock] — no op-mode-
  * side handling needed when you later wire up
- * [org.firstinspires.ftc.teamcode.starter.localization.AprilTagCorrector].
+ * [org.firstinspires.ftc.teamcode.general.localization.AprilTagCorrector].
  *
  * Every tunable parameter is exposed under the **HeadingLockConfig** Panels
  * panel. Telemetry splits out per-term contributions so you can see which
