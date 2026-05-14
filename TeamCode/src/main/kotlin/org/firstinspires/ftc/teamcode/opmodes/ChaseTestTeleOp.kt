@@ -19,7 +19,11 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants
  * tick by the chaseTarget command.
  *
  * Controls:
- *  - Right stick → push the virtual ball around the field
+ *  - Right stick → nudge the virtual ball in field frame
+ *  - X (hold)    → snap the ball to ([configTargetX], [configTargetY]) and
+ *                 keep it pinned there while held. Edit those fields live
+ *                 in Panels and the ball follows. Release X to freeze the
+ *                 ball at that position; right stick then takes over again.
  *  - A          → re-place the ball [initialBallOffsetIn] inches in front
  *                 of the robot's current pose (good for resetting if it
  *                 drifts off-field)
@@ -42,6 +46,12 @@ class ChaseTestTeleOp : OpModeBase() {
 
         /** Where to place the ball relative to robot pose when A is pressed. */
         @JvmField var initialBallOffsetIn: Double = 24.0
+
+        /** Field-frame X (inches) the ball jumps to while X is held. Live-editable in Panels. */
+        @JvmField var configTargetX: Double = 24.0
+
+        /** Field-frame Y (inches) the ball jumps to while X is held. Live-editable in Panels. */
+        @JvmField var configTargetY: Double = 0.0
     }
 
     private lateinit var drive: MecanumDriveSubsystem
@@ -64,11 +74,16 @@ class ChaseTestTeleOp : OpModeBase() {
         val dt = (now - lastTickMs) / 1000.0
         lastTickMs = now
 
-        // Right stick moves the ball in field frame.
-        // GamepadEx already inverts Y so positive = stick up = +X (forward).
-        val dx = driver.rightStickY * ballSpeedInPerSec * dt
-        val dy = -driver.rightStickX * ballSpeedInPerSec * dt
-        ballPose = Pose(ballPose.x + dx, ballPose.y + dy, ballPose.heading)
+        if (driver.x) {
+            // Hold X: ball locks to the Panels-configured target (live).
+            ballPose = Pose(configTargetX, configTargetY, ballPose.heading)
+        } else {
+            // Right stick nudges the ball in field frame.
+            // GamepadEx already inverts Y so positive = stick up = +X (forward).
+            val dx = driver.rightStickY * ballSpeedInPerSec * dt
+            val dy = -driver.rightStickX * ballSpeedInPerSec * dt
+            ballPose = Pose(ballPose.x + dx, ballPose.y + dy, ballPose.heading)
+        }
 
         if (driver.aPressed) ballPose = ballInFrontOfRobot()
 
@@ -76,6 +91,7 @@ class ChaseTestTeleOp : OpModeBase() {
         val dist = hypot(ballPose.x - robotPose.x, ballPose.y - robotPose.y)
 
         telemetryBag.section("Chase Test") {
+            put("mode", if (driver.x) "config" else "stick")
             put("ball", ballPose)
             put("robot", robotPose)
             put("dist", dist, decimals = 2)
